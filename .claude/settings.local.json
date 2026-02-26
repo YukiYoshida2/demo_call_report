@@ -1,0 +1,18 @@
+{
+  "permissions": {
+    "allow": [
+      "mcp__databricks-mcp__databricks_discover",
+      "mcp__databricks-mcp__invoke_databricks_cli",
+      "Bash",
+      "Write",
+      "Edit",
+      "Task",
+      "ToolSearch",
+      "mcp__claude_ai_Notion__notion-create-pages",
+      "mcp__claude_ai_Notion__notion-search",
+      "mcp__claude_ai_Notion__notion-fetch",
+      "mcp__claude_ai_Slack__slack_send_message",
+      "mcp__claude_ai_Slack__slack_read_channel"
+    ]
+  }
+}

@@ -1,0 +1,82 @@
+name: Daily Analysis Report
+
+on:
+  schedule:
+    # JST 19:00 = UTC 10:00（平日のみ）
+    - cron: '0 10 * * 1-5'
+  workflow_dispatch:
+    # 手動実行も可能（GitHub UIの "Run workflow" ボタンから）
+
+permissions:
+  contents: write
+
+jobs:
+  analyze:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    steps:
+      - name: Skip on Japanese holidays
+        id: holiday-check
+        run: |
+          pip install jpholiday
+          python3 -c "
+          import jpholiday, datetime, sys
+          today = datetime.datetime.now(datetime.timezone(datetime.timedelta(hours=9))).date()
+          if jpholiday.is_holiday(today):
+              print(f'{today} is a Japanese holiday: {jpholiday.is_holiday_name(today)}')
+              sys.exit(1)
+          print(f'{today} is not a holiday, proceeding.')
+          "
+
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Install Claude Code
+        run: npm install -g @anthropic-ai/claude-code
+
+      - name: Install Databricks CLI
+        run: |
+          curl -fsSL https://raw.githubusercontent.com/databricks/setup-cli/main/install.sh | sh
+
+      - name: Configure Databricks Auth
+        run: |
+          printf '[DEFAULT]\nhost = %s\ntoken = %s\n' \
+            "$DATABRICKS_HOST" "$DATABRICKS_TOKEN" > ~/.databrickscfg
+        env:
+          DATABRICKS_HOST: ${{ secrets.DATABRICKS_HOST }}
+          DATABRICKS_TOKEN: ${{ secrets.DATABRICKS_TOKEN }}
+
+      - name: Run Analysis
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          # Agent Teams を有効化
+          CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS: "1"
+        run: |
+          bash scripts/run-analysis.sh 2>&1 | tee "logs/run-$(date -u +%Y-%m-%d).log"
+
+      - name: Commit and Push Results
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+
+          # 新規レポートとデータがあればコミット
+          git add data/ reports/ logs/
+          if git diff --cached --quiet; then
+            echo "No changes to commit"
+          else
+            git commit -m "Daily analysis report $(date -u +%Y-%m-%d)"
+            git push
+          fi
+
+      - name: Publish Report (Notion + Slack)
+        continue-on-error: true
+        env:
+          NOTION_API_KEY: ${{ secrets.NOTION_API_KEY }}
+          SLACK_BOT_TOKEN: ${{ secrets.SLACK_BOT_TOKEN }}
+        run: python3 scripts/publish_report.py
