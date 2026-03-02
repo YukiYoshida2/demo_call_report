@@ -158,8 +158,13 @@ def write_file(path, content):
 def find_csv(data_dir, query_id, date_str):
     prefix = CSV_PREFIXES[query_id]
     expected = f"{prefix}-{date_str}.csv"
-    path = data_dir / expected
-    return path if path.exists() else None
+    # New structure: data/{date_str}/{filename}.csv
+    path = data_dir / date_str / expected
+    if path.exists():
+        return path
+    # Fallback: data/{filename}.csv (legacy flat structure)
+    path_flat = data_dir / expected
+    return path_flat if path_flat.exists() else None
 
 
 def find_prev_month_csv(data_dir, query_id, current_date_str):
@@ -171,10 +176,24 @@ def find_prev_month_csv(data_dir, query_id, current_date_str):
         prev_y, prev_m = current.year, current.month - 1
 
     candidates = []
+    # New structure: search date subfolders
+    for d in sorted(data_dir.iterdir()):
+        if d.is_dir() and d.name != "computed":
+            try:
+                folder_date = datetime.strptime(d.name, "%Y-%m-%d").date()
+                if folder_date.year == prev_y and folder_date.month == prev_m:
+                    f = d / f"{prefix}-{d.name}.csv"
+                    if f.exists():
+                        candidates.append(f)
+            except ValueError:
+                pass
+    if candidates:
+        return candidates[-1]
+    # Fallback: legacy flat structure
     for f in sorted(data_dir.iterdir()):
-        if not f.name.startswith(prefix + "-"):
+        if not f.is_file() or not f.name.startswith(prefix + "-"):
             continue
-        date_part = f.name[len(prefix) + 1 : -4]  # "着地予想-2026-01-25.csv" → "2026-01-25"
+        date_part = f.name[len(prefix) + 1 : -4]
         try:
             file_date = datetime.strptime(date_part, "%Y-%m-%d").date()
             if file_date.year == prev_y and file_date.month == prev_m:

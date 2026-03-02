@@ -67,13 +67,14 @@ MCP経由でDatabricks（DBX）の6つのクエリを実行し、取得したデ
 ├── scripts/
 │   ├── run-analysis.sh   # CI/CD用の実行スクリプト
 │   └── compute_tables.py # 確定テーブル計算（Python標準ライブラリのみ）
-├── data/                 # CSVデータ（日付サフィックス付き、日次蓄積）
-│   ├── 着地予想-YYYY-MM-DD.csv
-│   ├── SAL着予-YYYY-MM-DD.csv
-│   ├── 商談実施着予-YYYY-MM-DD.csv
-│   ├── デモ電話-YYYY-MM-DD.csv
-│   ├── SAL率_積み上げ-YYYY-MM-DD.csv
-│   ├── デモ電話_商談-YYYY-MM-DD.csv
+├── data/                 # CSVデータ（日付フォルダ別、日次蓄積）
+│   ├── YYYY-MM-DD/       # 取得日ごとのサブフォルダ
+│   │   ├── 着地予想-YYYY-MM-DD.csv
+│   │   ├── SAL着予-YYYY-MM-DD.csv
+│   │   ├── 商談実施着予-YYYY-MM-DD.csv
+│   │   ├── デモ電話-YYYY-MM-DD.csv
+│   │   ├── SAL率_積み上げ-YYYY-MM-DD.csv
+│   │   └── デモ電話_商談-YYYY-MM-DD.csv
 │   └── computed/         # Python計算済みテーブル（自動生成）
 │       ├── _validation.md
 │       ├── step1_*.md
@@ -82,7 +83,7 @@ MCP経由でDatabricks（DBX）の6つのクエリを実行し、取得したデ
     └── レポート-YYYY-MM-DD.md
 ```
 
-- `data/` にはCSVが日付付きで蓄積される。前月Q1〜Q3 CSVも同フォルダに置くことで前月比較が可能
+- `data/YYYY-MM-DD/` にCSVが取得日ごとに格納される。前月Q1〜Q3 CSVも対応する日付フォルダに置くことで前月比較が可能
 - `data/computed/` はPythonスクリプトが自動生成する。手動編集禁止
 - `reports/` にはレポートが日付付きで蓄積される
 
@@ -97,3 +98,13 @@ Team Lead → Agent A: Q1+Q2+Q3（小規模、即完了）
 ```
 
 ※ `/analyze-and-report` はAgent Teamに分割しない。テーブル間の横断解釈を維持するため、単一Agentが全computed tablesを通読して分析する。
+
+## テストモード
+
+ユーザーが「テストで実施して」「テストで分析して」等、テストを指示した場合:
+- `/publish-report` の Slack通知先を `.env` の `SLACK_WEBHOOK_URL_TEST` に切り替える
+- 実行時に `SLACK_WEBHOOK_URL` 環境変数をテスト用URLで上書きしてから `publish_report.py` を呼び出す:
+  ```bash
+  SLACK_WEBHOOK_URL="$SLACK_WEBHOOK_URL_TEST" python3 scripts/publish_report.py
+  ```
+- Notion投稿は本番と同じ（テスト用DBは分けない）

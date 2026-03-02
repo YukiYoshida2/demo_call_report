@@ -1,0 +1,6 @@
+shell-init: error retrieving current directory: getcwd: cannot access parent directories: Operation not permitted
+/bin/bash: /Users/yukiyoshida/Desktop/demo_call_report/scripts/run-local.sh: Operation not permitted
+shell-init: error retrieving current directory: getcwd: cannot access parent directories: Operation not permitted
+/bin/bash: /Users/yukiyoshida/Desktop/demo_call_report/scripts/run-local.sh: Operation not permitted
+shell-init: error retrieving current directory: getcwd: cannot access parent directories: Operation not permitted
+/bin/bash: /Users/yukiyoshida/Desktop/demo_call_report/scripts/run-local.sh: Operation not permitted

@@ -35,12 +35,12 @@ holidays AS (
 ),
 
 targets AS (
-  SELECT '全体' AS dimension,   2008 AS monthly_target
-  UNION ALL SELECT 'TOP',       335
-  UNION ALL SELECT 'LIS',       366
-  UNION ALL SELECT 'DIS',       817
-  UNION ALL SELECT 'FAX・EDM',  400
-  UNION ALL SELECT 'その他',     90
+  SELECT '全体' AS dimension,   2074 AS monthly_target
+  UNION ALL SELECT 'TOP',      335      
+  UNION ALL SELECT 'LIS',      400      
+  UNION ALL SELECT 'DIS',      966      
+  UNION ALL SELECT 'FAX・EDM', 283 
+  UNION ALL SELECT 'その他',    90
 ),
 
 calendar AS (
@@ -169,12 +169,12 @@ holidays AS (
 ),
 
 targets AS (
-  SELECT '全体' AS dimension,   249 AS monthly_target
-  UNION ALL SELECT 'TOP',       78
-  UNION ALL SELECT 'LIS',       51
-  UNION ALL SELECT 'DIS',       82
-  UNION ALL SELECT 'FAX・EDM',  28
-  UNION ALL SELECT 'その他',     9
+  SELECT '全体'     AS dimension, 301 AS monthly_target UNION ALL
+  SELECT 'TOP',      81 UNION ALL
+  SELECT 'LIS',      72 UNION ALL
+  SELECT 'DIS',      117 UNION ALL
+  SELECT 'FAX・EDM', 22 UNION ALL
+  SELECT 'その他',   8
 ),
 
 calendar AS (
@@ -214,7 +214,10 @@ sal_raw AS (
     END AS dimension
   FROM ivry_staff.marketing_operations.lead_monitoring
   CROSS JOIN params p
-  WHERE tier_classification_campaign_member = 'デモ電話'
+  WHERE (
+          tier_classification_campaign_member = 'デモ電話'
+        or tier_classification_campaign_member = 'ライトコンバージョン'
+        or tier_classification_campaign_member = 'BDR/休眠掘り起こし')
     AND contact_reasons_for_ineligible_leads IS NULL
     AND duplication_record = false
     AND no = 1
@@ -305,12 +308,12 @@ holidays AS (
 ),
 
 targets AS (
-  SELECT '全体' AS dimension,   221 AS monthly_target
-  UNION ALL SELECT 'TOP',       74
-  UNION ALL SELECT 'LIS',       44
-  UNION ALL SELECT 'DIS',       70
-  UNION ALL SELECT 'FAX・EDM',  24
-  UNION ALL SELECT 'その他',     8
+  SELECT '全体'     AS dimension, 265 AS monthly_target UNION ALL
+  SELECT 'TOP',      77 UNION ALL
+  SELECT 'LIS',      62 UNION ALL
+  SELECT 'DIS',      100 UNION ALL
+  SELECT 'FAX・EDM', 19 UNION ALL
+  SELECT 'その他',   7
 ),
 
 calendar AS (
@@ -350,7 +353,10 @@ meeting_raw AS (
     END AS dimension
   FROM ivry_staff.marketing_operations.lead_monitoring
   CROSS JOIN params p
-  WHERE tier_classification_campaign_member = 'デモ電話'
+  WHERE (
+          tier_classification_campaign_member = 'デモ電話'
+        or tier_classification_campaign_member = 'ライトコンバージョン'
+        or tier_classification_campaign_member = 'BDR/休眠掘り起こし')
     AND contact_reasons_for_ineligible_leads IS NULL
     AND duplication_record = false
     AND no = 1
@@ -429,7 +435,7 @@ WITH Lead AS (
       ELSE '固定電話'
     END AS phone_type_flag,
     CASE
-      WHEN lead.is_approach_history_memo__c LIKE '%タスク%' then '完了'
+      WHEN (lead.is_approach_history_memo__c LIKE '%タスク%'  or demo_call_status_complete_task__c LIKE '%タスク完了%') then '完了'
       else '未完了'
     end as is_task_complete
   FROM ivry_source.salesforce.lead lead
@@ -651,7 +657,10 @@ WITH data AS (
     from_utc_timestamp(first_meeting_date, 'Asia/Tokyo') AS first_meeting_date_jst
   FROM ivry_staff.marketing_operations.lead_monitoring
   WHERE from_utc_timestamp(f_initial_deal_acquisition_date, 'Asia/Tokyo') >= DATE '2025-09-01'
-    AND tier_classification_campaign_member = 'デモ電話'
+    AND (
+          tier_classification_campaign_member = 'デモ電話'
+        or tier_classification_campaign_member = 'ライトコンバージョン'
+        or tier_classification_campaign_member = 'BDR/休眠掘り起こし')
     AND contact_reasons_for_ineligible_leads IS NULL
     AND duplication_record = false
     AND no = 1
