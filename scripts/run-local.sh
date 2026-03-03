@@ -96,10 +96,7 @@ if [[ ! -f ~/.databrickscfg ]]; then
         "$DATABRICKS_HOST" "$DATABRICKS_TOKEN" > ~/.databrickscfg
 fi
 
-# --- Step 5: Agent Teams 有効化 ---
-export CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS=1
-
-# --- Step 6: 分析実行（fetch → compute → analyze） ---
+# --- Step 5: 分析実行（fetch → compute → analyze） ---
 log "=== Analysis Start ==="
 
 claude -p "分析して。ただし /publish-report はスキップして（ローカルスクリプトで別途実行する）" \
@@ -113,7 +110,7 @@ if [[ $ANALYSIS_EXIT -ne 0 ]]; then
     die "分析に失敗しました (exit=$ANALYSIS_EXIT)"
 fi
 
-# --- Step 7: Publish（Notion + Slack） ---
+# --- Step 6: Publish（Notion + Slack） ---
 log "=== Publish Start ==="
 
 if python3 "${PROJECT_DIR}/scripts/publish_report.py" 2>&1 | tee -a "$LOG_FILE"; then
@@ -123,7 +120,7 @@ else
     log "レポート: reports/レポート-${TODAY}.md"
 fi
 
-# --- Step 8: 古いログのクリーンアップ（30日超） ---
+# --- Step 7: 古いログのクリーンアップ（30日超） ---
 find "$LOG_DIR" -name "run-*.log" -mtime +30 -delete 2>/dev/null || true
 
 # launchd ログのローテーション（1MB超なら後半500KBに切り詰め）

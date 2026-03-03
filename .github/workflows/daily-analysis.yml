@@ -55,8 +55,6 @@ jobs:
       - name: Run Analysis
         env:
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
-          # Agent Teams を有効化
-          CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS: "1"
         run: |
           bash scripts/run-analysis.sh 2>&1 | tee "logs/run-$(date -u +%Y-%m-%d).log"
 

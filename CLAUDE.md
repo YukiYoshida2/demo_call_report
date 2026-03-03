@@ -9,7 +9,7 @@ MCP経由でDatabricks（DBX）の6つのクエリを実行し、取得したデ
 
 ```
 1. Claudeに「分析して」と指示
-2. /fetch-data でDBXからCSVデータを取得（Agent Teamで並列化）
+2. /fetch-data でDBXからCSVデータを取得（フォアグラウンドAgent並列）
 3. /compute-tables でPythonスクリプトによる確定テーブル計算を実行
 4. /analyze-and-report で全テーブルを通読しインサイト生成 → レポート合成
 5. /publish-report でNotionに投稿 → SlackにURL通知
@@ -87,17 +87,20 @@ MCP経由でDatabricks（DBX）の6つのクエリを実行し、取得したデ
 - `data/computed/` はPythonスクリプトが自動生成する。手動編集禁止
 - `reports/` にはレポートが日付付きで蓄積される
 
-## データ取得の並列化（Agent Team）
+## データ取得の並列化（フォアグラウンドAgent）
 
-`/fetch-data` のみAgent Teamで並列化する（MCP応答をメインコンテキストから隔離するため）:
+`/fetch-data` ではフォアグラウンドAgentを4つ並列起動する（MCP応答をメインコンテキストから隔離するため）:
 ```
-Team Lead → Agent A: Q1+Q2+Q3（小規模、即完了）
-          → Agent B: Q4（~20,000行、チャンク分割）
-          → Agent C: Q5（数千行、チャンク分割）
-          → Agent D: Q6（~13,000行、チャンク分割）
+メイン → Agent A: Q1+Q2+Q3（小規模、即完了）
+       → Agent B: Q4（~20,000行、チャンク分割）
+       → Agent C: Q5（数千行、チャンク分割）
+       → Agent D: Q6（~13,000行、チャンク分割）
 ```
 
-※ `/analyze-and-report` はAgent Teamに分割しない。テーブル間の横断解釈を維持するため、単一Agentが全computed tablesを通読して分析する。
+- Agent Team（TeamCreate + run_in_background）は使わない — Team Leadのターンが終了し、完了検知ができないため
+- 4つのAgentツール呼び出しを1メッセージで同時発行し、全Agent完了をブロッキングで待つ
+
+※ `/analyze-and-report` はAgent並列に分割しない。テーブル間の横断解釈を維持するため、単一Agentが全computed tablesを通読して分析する。
 
 ## テストモード
 

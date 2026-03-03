@@ -13,7 +13,7 @@
 
 ```
 1. Claudeに「分析して」と指示
-2. /fetch-data     → DBXからCSVデータを取得（Agent Teamで並列化）
+2. /fetch-data     → DBXからCSVデータを取得（フォアグラウンドAgent並列）
 3. /compute-tables → Pythonによる確定テーブル計算
 4. /analyze-and-report → 全テーブル通読 → インサイト生成 → レポート合成
 5. /publish-report → Notionに投稿 → SlackにURL通知
