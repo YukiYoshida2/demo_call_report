@@ -66,50 +66,34 @@ def md_table_to_notion(table_lines):
 
 ### Step 3: Notionページ作成
 
-1. Notion enhanced markdown spec を `notion://docs/enhanced-markdown-spec` で確認（初回のみ）
+1. `ToolSearch` で `select:mcp__claude_ai_Notion__notion-create-pages` を実行し、deferred toolをロードする（必須。ロードしないとツール呼び出しが失敗する）
 2. `notion-create-pages` で以下のパラメータでページ作成:
    - **parent**: `{"data_source_id": "311eea80-adae-80a5-a798-000bc1a1a73f"}`
    - **properties**: `{"ページ名": "レポート {YYYY-MM-DD} {HH:MM}"}`（現在日時を使用）
    - **content**: Step 2 で変換したNotion flavored Markdown
 3. 作成結果からページURLを取得
 
-### Step 4: Slack通知
+### Step 4: Slack通知（Pythonスクリプト経由）
 
-1. **computed tables から直接データを読み取る**（レポートのエグゼクティブサマリではなく）:
-   - `data/computed/step1_着電着予.md`, `step1_SAL着予.md`, `step1_商談実施着予.md` → チャネル別の達成率・判定
-   - `data/computed/step1_課題チャネル.md` → 重点課題チャネルの特定
-   - `data/computed/step2_ファネル転換率.md` → CN率・SAL率の前月比（📉マーク）
-   - `data/computed/step2_CVコンテンツ.md` → 課題チャネルのボトルネックCV特定
+**重要:** 必ず Step 3 の Notion ページ作成が完了し URL を取得してから実行すること。
 
-2. 以下の **2セクション** でサマリを構成する:
-   - **📊 達成進捗（チャネル別）**: 全チャネルの着電/SAL/商談の達成率と判定を1行ずつ。数値はcomputed tableからそのまま転記（再計算禁止）
-   - **🚨 クリティカルな課題**: 重点課題チャネルごとに「CN率が低いのか / SAL率が低いのか → その中でどの流入経路（CV）が悪いのか」の順で構造化
+Slack通知は `scripts/publish_report.py` に `--notion-url` オプションを渡して実行する。
+スクリプトが computed tables から達成進捗・クリティカルな課題を自動抽出し、Notion URLを含むメッセージを生成・送信する。
 
-3. `slack_send_message` で以下を投稿:
-   - **channel_id**: `C08PMM3C601`
-   - **message**: 実行日時・サマリ・NotionページURLを含むメッセージ
-   - **注意**: 課題でIS個人名を出さない（チーム単位・チャネル単位で記述する）
-
+```bash
+python3 scripts/publish_report.py --notion-url "{Notion URL}"
 ```
-<@U07EJ6YKUPK> <@U05V0RAF09M> <@U07LNE4G2R0>
-デモ電話チーム 月次進捗レポート（YYYY年MM月DD日 HH:MM 実行）
-📅 参照期間: YYYY-MM-DD 〜 YYYY-MM-DD
 
-📊 *達成進捗（チャネル別）*
-• 全体: 着電{X}%{判定} / SAL{Y}%{判定} / 商談{Z}%{判定}
-• DIS: 着電{X}%{判定} / SAL{Y}%{判定} / 商談{Z}%{判定}
-• LIS: ...
-• TOP: ...
-• FAX・EDM: ...
-• その他: ...
-
-🚨 *クリティカルな課題*
-• {チャネル}: {CN率 or SAL率}が{値}（{前月比pp📉}）
-  → {ボトルネックCV1}({問題の率}), {CV2}({問題の率})
-• {チャネル}: ...
-
-📎 {Notion URL}
+テストモード（CLAUDE.md参照）の場合:
+```bash
+SLACK_WEBHOOK_URL="$SLACK_WEBHOOK_URL_TEST" python3 scripts/publish_report.py --notion-url "{Notion URL}"
 ```
+
+**Slackメッセージの構成**（スクリプトが自動生成）:
+- **📊 達成進捗（チャネル別）**: 全チャネルの着電/SAL/商談の達成率と判定
+- **🚨 クリティカルな課題**: 重点課題チャネルごとのボトルネック
+- **📎 Notion URL**: Step 3 で取得したURL
+- **注意**: 課題でIS個人名は出さない（チーム単位・チャネル単位で記述）
 
 ### Step 5: 完了報告
 

@@ -21,12 +21,22 @@ CI用レポート公開スクリプト — Notion投稿 + Slack通知
 import json
 import os
 import re
+import ssl
 import sys
 from glob import glob
 from urllib.request import Request, urlopen
 from urllib.error import HTTPError, URLError
 from datetime import datetime, timezone, timedelta
 from pathlib import Path
+
+
+def _ssl_context():
+    """macOS の Python.org ビルドで証明書が見つからない問題を回避"""
+    try:
+        import certifi
+        return ssl.create_default_context(cafile=certifi.where())
+    except ImportError:
+        return ssl.create_default_context()
 
 # ================================================================
 # 定数
@@ -566,7 +576,7 @@ def _notion_req(method, path, api_key, payload=None):
         "Notion-Version": NOTION_VER,
     })
     try:
-        with urlopen(req) as resp:
+        with urlopen(req, context=_ssl_context()) as resp:
             return json.loads(resp.read())
     except HTTPError as e:
         body = e.read().decode("utf-8", errors="replace")
@@ -661,7 +671,7 @@ def send_slack_webhook(url, message):
         "Content-Type": "application/json",
     })
     try:
-        with urlopen(req):
+        with urlopen(req, context=_ssl_context()):
             print("  Slack webhook: sent")
             return True
     except (HTTPError, URLError) as e:
@@ -677,7 +687,7 @@ def send_slack_api(token, channel, message):
                       "Content-Type": "application/json",
                   })
     try:
-        with urlopen(req) as resp:
+        with urlopen(req, context=_ssl_context()) as resp:
             result = json.loads(resp.read())
             if result.get("ok"):
                 print("  Slack API: sent")
@@ -694,6 +704,13 @@ def send_slack_api(token, channel, message):
 # ================================================================
 
 def main():
+    import argparse
+    parser = argparse.ArgumentParser(description="Publish report to Notion + Slack")
+    parser.add_argument("--notion-url", default="",
+                        help="Pre-created Notion page URL (skip Notion creation, Slack-only mode)")
+    parser.add_argument("--dry-run", action="store_true", help="Print message without sending")
+    args = parser.parse_args()
+
     notion_key = os.environ.get("NOTION_API_KEY", "")
     notion_db = os.environ.get("NOTION_DATABASE_ID", DEFAULT_DB_ID)
     slack_webhook = os.environ.get("SLACK_WEBHOOK_URL", "")
@@ -702,8 +719,14 @@ def main():
     mention_env = os.environ.get("SLACK_MENTION_USERS", "")
     mention_users = mention_env.split(",") if mention_env else DEFAULT_MENTIONS
 
-    if not notion_key and not slack_webhook and not slack_token:
+    # --notion-url が指定されている場合は Slack 通知のみ
+    slack_only = bool(args.notion_url)
+
+    if not slack_only and not notion_key and not slack_webhook and not slack_token:
         print("No credentials set. Skipping publish.")
+        return
+    if slack_only and not slack_webhook and not slack_token:
+        print("No Slack credentials set. Skipping publish.")
         return
 
     report_path = find_latest_report()
@@ -715,8 +738,10 @@ def main():
     title, body = read_report(report_path)
 
     # --- Notion ---
-    notion_url = ""
-    if notion_key:
+    notion_url = args.notion_url
+    if slack_only:
+        print(f"Notion: skipped (--notion-url provided: {notion_url})")
+    elif notion_key:
         print("Publishing to Notion...")
         blocks = markdown_to_blocks(body)
         print(f"  Blocks: {len(blocks)}")
@@ -752,6 +777,12 @@ def main():
                 period_end = meta.get("period_end", "")
         except Exception:
             pass
+
+    # Notion URLが空の場合はSlack送信をブロック（URL無し通知を防止）
+    if not notion_url:
+        print("ERROR: Notion URL is empty. Slack notification skipped to prevent sending without link.", file=sys.stderr)
+        print("  Hint: Create Notion page first, then pass --notion-url <URL>")
+        sys.exit(1)
 
     # Fallback to executive summary if computed tables unavailable
     summary_fallback = extract_executive_summary(body) if not progress else None
