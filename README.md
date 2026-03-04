@@ -1,66 +1,170 @@
 # demo_call_report
 
-デモ電話チームの月次進捗を自動分析し、レポートを生成・配信するツールです。
+デモ電話チームの月次進捗を自動分析し、レポートを生成・配信するパイプライン。
 
-## 何をするか
-
-1. **データ取得** — Databricks（MCP経由）から6種類のCSVデータを並列取得
-2. **テーブル計算** — Pythonスクリプトで分析テーブルを確定計算（LLMによる数値計算を排除）
-3. **インサイト生成** — 全テーブルを横断的に読み込み、B2B SaaS営業マネージャー視点でレポートを生成
-4. **配信** — Notionへ投稿し、SlackにURL通知
-
-## 運用フロー
+## 処理の全体フロー
 
 ```
-1. Claudeに「分析して」と指示
-2. /fetch-data     → DBXからCSVデータを取得（フォアグラウンドAgent並列）
-3. /compute-tables → Pythonによる確定テーブル計算
-4. /analyze-and-report → 全テーブル通読 → インサイト生成 → レポート合成
-5. /publish-report → Notionに投稿 → SlackにURL通知
+[launchd / 手動]
+       │
+       ▼
+ scripts/run-local.sh
+       │  .env 読み込み → 環境変数チェック → 土日祝スキップ判定
+       │
+       ▼
+ claude -p "分析して"
+       │
+       │  ┌──────────────────────────────────────────────────┐
+       │  │ Claude Code が 4つのスキルを順に実行              │
+       │  │                                                  │
+       │  │  1. /fetch-data                                  │
+       │  │     Databricks MCP → data/YYYY-MM-DD/*.csv       │
+       │  │                                                  │
+       │  │  2. /compute-tables                              │
+       │  │     python3 compute_tables.py → data/computed/   │
+       │  │                                                  │
+       │  │  3. /analyze-and-report                          │
+       │  │     computed tables を通読 → reports/*.md        │
+       │  │                                                  │
+       │  │  4. /publish-report                              │
+       │  │     Notion MCP でページ作成 → URL 取得           │
+       │  │     publish_report.py --notion-url <URL>         │
+       │  │     → Slack Webhook で通知                       │
+       │  └──────────────────────────────────────────────────┘
+       │
+       ▼
+     完了
 ```
+
+## 各ステップの詳細
+
+### 1. /fetch-data — データ取得
+
+Databricks MCP 経由で 6 つの SQL クエリを実行し、CSV を `data/YYYY-MM-DD/` に保存する。
+
+- **Q1〜Q3**（着地予想・SAL着予・商談実施着予）: 各24行程度。Agent A が直接取得
+- **Q4**（デモ電話）: 約20,000行。Agent B が LIMIT/OFFSET チャンク分割で取得
+- **Q5**（SAL率_積み上げ）: 数千行。Agent C がチャンク分割で取得
+- **Q6**（デモ電話_商談）: 約13,000行。Agent D がチャンク分割で取得
+
+4つのフォアグラウンド Agent を同時起動し、全完了をブロッキングで待つ。
+
+**入出力:**
+```
+Databricks SQL  →  data/YYYY-MM-DD/着地予想-YYYY-MM-DD.csv
+                   data/YYYY-MM-DD/SAL着予-YYYY-MM-DD.csv
+                   data/YYYY-MM-DD/商談実施着予-YYYY-MM-DD.csv
+                   data/YYYY-MM-DD/デモ電話-YYYY-MM-DD.csv
+                   data/YYYY-MM-DD/SAL率_積み上げ-YYYY-MM-DD.csv
+                   data/YYYY-MM-DD/デモ電話_商談-YYYY-MM-DD.csv
+```
+
+### 2. /compute-tables — テーブル計算
+
+```bash
+python3 scripts/compute_tables.py --date YYYY-MM-DD
+```
+
+CSV から 13 個の Markdown テーブルを `data/computed/` に生成する。Python 標準ライブラリのみ使用。
+
+LLM は数値計算を行わない。COUNT, SUM, 率の算出、前月比の計算はすべてこのスクリプトが担う。
+
+**出力ファイル:**
+
+| ファイル | 内容 |
+|---------|------|
+| `_validation.md` | データ検証結果（行数・スキーマチェック） |
+| `step1_着電着予.md` | 着電の着地予測 vs 目標 |
+| `step1_SAL着予.md` | SAL の着地予測 vs 目標 |
+| `step1_商談実施着予.md` | 商談実施の着地予測 vs 目標 |
+| `step1_課題チャネル.md` | 課題チャネル一覧（Bad数ランキング） |
+| `step2_ファネル転換率.md` | チャネル別 CN率・SAL率 + 前月比 |
+| `step2_CVコンテンツ.md` | チャネル別 CV コンテンツ Top10 |
+| `step2_SALスピード.md` | SAL 日数分布（1日/3日/7日/14日/30日以内） |
+| `step2_時系列.md` | 週別・営業時間帯別・平休日別トレンド |
+| `step2_担当者サマリ.md` | 担当者別パフォーマンスサマリ |
+| `step2_担当者チャネル.md` | 担当者 x チャネルのクロス分析 |
+| `step2_インパクト試算.md` | 担当者要因の SAL インパクト試算 |
+| `step2_週次急落.md` | 週次で急落した担当者の検知 |
+
+### 3. /analyze-and-report — レポート生成
+
+単一の Claude Agent が `data/computed/` の全 12 テーブルを通読し、Markdown レポートを生成する。
+
+- テーブル間の横断解釈を重視するため、Agent 並列に分割しない
+- computed table の数値は一切変更しない（そのまま転記）
+- LLM が担うのはインサイト・所見・アクション提案のみ
+
+**入出力:**
+```
+data/computed/step*.md  →  reports/レポート-YYYY-MM-DD.md
+```
+
+### 4. /publish-report — Notion 投稿 + Slack 通知
+
+2段階で実行する。Notion URL を取得してからでないと Slack 通知しない。
+
+**Step A: Notion ページ作成（MCP 経由）**
+
+1. レポート内の Markdown テーブルを Notion `<table>` 形式に変換
+2. `notion-create-pages` MCP ツールでページ作成
+3. 作成結果から URL を取得
+
+**Step B: Slack 通知（Python スクリプト）**
+
+```bash
+python3 scripts/publish_report.py --notion-url "<Step A で取得した URL>"
+```
+
+- `data/computed/` から達成進捗・クリティカルな課題を自動抽出
+- Notion URL を含む Slack メッセージを構成・送信
+- **Notion URL が空の場合は Slack 送信をブロックして exit 1 で停止する**（URL なし通知の防止）
+
+## スクリプト一覧
+
+| ファイル | 役割 | 実行タイミング |
+|---------|------|-------------|
+| `scripts/run-local.sh` | パイプライン全体のエントリポイント。.env 読み込み → 土日祝スキップ → `claude -p "分析して"` 実行 | launchd（平日）/ 手動 |
+| `scripts/compute_tables.py` | CSV → 13 テーブルの確定計算。Python 標準ライブラリのみ | `/compute-tables` スキルから呼ばれる |
+| `scripts/publish_report.py` | Slack 通知。computed tables からサマリを自動構成。`--notion-url` 必須 | `/publish-report` スキルから呼ばれる |
 
 ## フォルダ構成
 
 ```
-├── CLAUDE.md                # 分析ルール・仕様の定義
-├── .claude/skills/          # Claude Code スキル定義
-├── .github/workflows/       # GitHub Actions（平日 JST 19:00 に自動実行、祝日スキップ）
+├── CLAUDE.md                    # 分析ルール・仕様の定義（スキルが参照）
+├── .claude/skills/              # Claude Code スキル定義
+│   ├── fetch-data/              #   データ取得
+│   ├── compute-tables/          #   テーブル計算
+│   ├── analyze-and-report/      #   インサイト生成 + レポート合成
+│   └── publish-report/          #   Notion投稿 + Slack通知
 ├── scripts/
-│   ├── run-analysis.sh      # CI/CD用の実行スクリプト
-│   ├── compute_tables.py    # 確定テーブル計算（Python標準ライブラリのみ）
-│   └── publish_report.py    # Notion投稿 + Slack通知
-├── data/                    # CSVデータ（日付サフィックス付き、日次蓄積）
-│   └── computed/            # Python計算済みテーブル（自動生成、手動編集禁止）
-├── reports/                 # 生成されたMarkdownレポート
-└── logs/                    # 実行ログ
+│   ├── run-local.sh             # launchd / 手動実行のエントリポイント
+│   ├── compute_tables.py        # 確定テーブル計算
+│   └── publish_report.py        # Slack通知（Notion URL必須）
+├── data/
+│   ├── YYYY-MM-DD/              # 取得日ごとの CSV（日次蓄積）
+│   └── computed/                # Python 計算済みテーブル（自動生成、手動編集禁止）
+├── reports/                     # 生成された Markdown レポート（日付付きで蓄積）
+├── logs/                        # 実行ログ（30日超で自動削除）
+└── .env                         # 環境変数（git管理外）
 ```
 
-## 入力データ（6種類のCSV）
+## 環境変数（.env）
 
-| # | ファイル | 用途 | 粒度 |
-| --- | ------- | ---- | ---- |
-| Q1 | 着地予想 | 着電数の着地予測 | 日 x チャネル |
-| Q2 | SAL着予 | SAL（アポ獲得）の着地予測 | 日 x チャネル |
-| Q3 | 商談実施着予 | 商談実施数の着地予測 | 日 x チャネル |
-| Q4 | デモ電話 | リード単位の実績明細 | リード単位 |
-| Q5 | SAL率_積み上げ | リード獲得〜SALまでの日数分布 | リード単位 |
-| Q6 | デモ電話_商談 | 商談明細（リード→商談の紐付き） | 商談単位 |
+| 変数 | 必須 | 用途 |
+|------|------|------|
+| `DATABRICKS_HOST` | Yes | Databricks ワークスペース URL |
+| `DATABRICKS_TOKEN` | Yes | Databricks アクセストークン |
+| `SLACK_WEBHOOK_URL` | Yes | Slack Incoming Webhook URL（本番チャネル） |
+| `SLACK_WEBHOOK_URL_TEST` | No | テスト用 Slack Webhook URL |
+| `NOTION_API_KEY` | No | Notion Internal Integration トークン（Python 直接投稿時のみ） |
 
-## 計算の原則
+## テストモード
 
-- **数値計算はPythonが行う** — 集計・率の算出・前月比はすべて `scripts/compute_tables.py` で実行
-- **LLMはインサイトのみ** — テーブルの数値はPython出力をそのまま使用し、LLMは分析・提案のみ担当
-- **テーブル間の横断解釈を重視** — インサイト生成は単一Agentが全テーブルを通読して統合分析
+「テストで分析して」と指示すると、Slack 通知先がテスト用チャネルに切り替わる。
 
-## CI/CD
-
-GitHub Actionsで平日 JST 19:00（UTC 10:00）に自動実行されます。土日はcronで除外、祝日は `jpholiday` でスキップします。手動実行も可能です。
-
-```text
-データ取得 → テーブル計算 → レポート生成 → git commit/push → Notion投稿 → Slack通知
+```bash
+SLACK_WEBHOOK_URL="$SLACK_WEBHOOK_URL_TEST" python3 scripts/publish_report.py --notion-url "<URL>"
 ```
 
-## 使い方
-
-Claude Codeで「分析して」と指示すると、データ取得→計算→分析→レポート生成→配信まで一気通貫で実行されます。
-# demo_call_report
+Notion 投稿先は本番と同じ（テスト用 DB は分けていない）。
