@@ -65,7 +65,7 @@ MCP経由でDatabricks（DBX）の6つのクエリを実行し、取得したデ
 デモ電話/
 ├── CLAUDE.md             # このファイル
 ├── scripts/
-│   ├── run-analysis.sh   # CI/CD用の実行スクリプト
+│   ├── run-local.sh      # launchd定期実行スクリプト（fetch → compute → analyze → publish）
 │   └── compute_tables.py # 確定テーブル計算（Python標準ライブラリのみ）
 ├── data/                 # CSVデータ（日付フォルダ別、日次蓄積）
 │   ├── YYYY-MM-DD/       # 取得日ごとのサブフォルダ
