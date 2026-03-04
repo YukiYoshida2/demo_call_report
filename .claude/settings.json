@@ -1,6 +1,8 @@
 {
   "permissions": {
     "allow": [
+      "Bash(cd *)",
+      "Bash(ls *)",
       "Read(//tmp/**)",
       "Read(//private/tmp/**)",
       "Read(//Users/yukiyoshida/Library/LaunchAgents/**)"
