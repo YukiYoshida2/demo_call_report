@@ -99,8 +99,8 @@ fi
 # --- Step 5: 分析実行（fetch → compute → analyze） ---
 log "=== Analysis Start ==="
 
-claude -p "分析して。ただし /publish-report はスキップして（ローカルスクリプトで別途実行する）" \
-    --allowedTools "Bash,Read,Write,Edit,Glob,Grep,Task,Skill,ToolSearch,mcp__databricks-mcp__invoke_databricks_cli,mcp__databricks-mcp__read_skill_file,mcp__databricks-mcp__databricks_configure_auth,mcp__databricks-mcp__databricks_discover" \
+claude -p "分析して" \
+    --allowedTools "Bash,Read,Write,Edit,Glob,Grep,Task,Skill,ToolSearch,mcp__databricks-mcp__invoke_databricks_cli,mcp__databricks-mcp__read_skill_file,mcp__databricks-mcp__databricks_configure_auth,mcp__databricks-mcp__databricks_discover,mcp__claude_ai_Notion__notion-create-pages,mcp__claude_ai_Notion__notion-fetch,mcp__claude_ai_Slack__slack_send_message" \
     2>&1 | tee -a "$LOG_FILE"
 
 ANALYSIS_EXIT=${PIPESTATUS[0]}
@@ -110,17 +110,7 @@ if [[ $ANALYSIS_EXIT -ne 0 ]]; then
     die "分析に失敗しました (exit=$ANALYSIS_EXIT)"
 fi
 
-# --- Step 6: Publish（Notion + Slack） ---
-log "=== Publish Start ==="
-
-if python3 "${PROJECT_DIR}/scripts/publish_report.py" 2>&1 | tee -a "$LOG_FILE"; then
-    log "=== Publish End ==="
-else
-    log "WARNING: Publish に失敗しましたが、分析は完了しています"
-    log "レポート: reports/レポート-${TODAY}.md"
-fi
-
-# --- Step 7: 古いログのクリーンアップ（30日超） ---
+# --- Step 6: 古いログのクリーンアップ（30日超） ---
 find "$LOG_DIR" -name "run-*.log" -mtime +30 -delete 2>/dev/null || true
 
 # launchd ログのローテーション（1MB超なら後半500KBに切り詰め）
