@@ -2,7 +2,8 @@
   "permissions": {
     "allow": [
       "Read(//tmp/**)",
-      "Read(//private/tmp/**)"
+      "Read(//private/tmp/**)",
+      "Read(//Users/yukiyoshida/Library/LaunchAgents/**)"
     ]
   }
 }

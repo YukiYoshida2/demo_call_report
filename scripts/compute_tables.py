@@ -42,7 +42,7 @@ CSV_PREFIXES = {
 }
 
 Q4_REQUIRED = [
-    "id", "reasons_for_ineligible_leads", "inflow_route_media",
+    "id", "reasons_for_ineligible_leads__c", "inflow_route_media",
     "cv_content_sub__c", "is_connect", "is_sal", "is_task_complete",
     "created_date_jst", "month", "business_hours_class", "is_holiday",
     "phone_type_flag", "user_name",
@@ -217,7 +217,7 @@ def load_csv_file(filepath):
 # ================================================================
 
 def is_eligible(row):
-    val = row.get("reasons_for_ineligible_leads", "")
+    val = row.get("reasons_for_ineligible_leads__c", "")
     return val == "" or val.lower() == "null"
 
 

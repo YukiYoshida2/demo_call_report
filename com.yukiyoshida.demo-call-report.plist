@@ -9,12 +9,12 @@
     <key>ProgramArguments</key>
     <array>
         <string>/bin/bash</string>
-        <string>/Users/yukiyoshida/Desktop/demo_call_report/scripts/run-local.sh</string>
+        <string>/Users/yukiyoshida/Projects/demo_call_report/scripts/run-local.sh</string>
         <string>--scheduled</string>
     </array>
 
     <key>WorkingDirectory</key>
-    <string>/Users/yukiyoshida/Desktop/demo_call_report</string>
+    <string>/Users/yukiyoshida/Projects/demo_call_report</string>
 
     <!-- 毎日 19:00（ローカルタイムゾーン = JST）に実行 -->
     <!-- 土日・祝日のスキップはスクリプト内の --scheduled フラグで処理 -->
@@ -39,9 +39,9 @@
 
     <!-- ログ出力先 -->
     <key>StandardOutPath</key>
-    <string>/Users/yukiyoshida/Desktop/demo_call_report/logs/launchd-stdout.log</string>
+    <string>/Users/yukiyoshida/Projects/demo_call_report/logs/launchd-stdout.log</string>
     <key>StandardErrorPath</key>
-    <string>/Users/yukiyoshida/Desktop/demo_call_report/logs/launchd-stderr.log</string>
+    <string>/Users/yukiyoshida/Projects/demo_call_report/logs/launchd-stderr.log</string>
 
     <!-- 失敗時に再起動しない -->
     <key>KeepAlive</key>
